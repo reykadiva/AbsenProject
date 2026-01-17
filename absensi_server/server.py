@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request, jsonify
 import sqlite3
 import os
 
@@ -9,7 +9,18 @@ DB_NAME = "absensi.db"
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Ensure table exists but DO NOT insert dummy data
+    
+    # 1. Create table `users` (Master Data)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            uid TEXT PRIMARY KEY,
+            nama TEXT,
+            nim TEXT
+        )
+    ''')
+
+    # 2. Create table `attendance` (Transaction Log)
+    # Using DEFAULT CURRENT_TIMESTAMP so SQLite handles UTC time automatically
     c.execute('''
         CREATE TABLE IF NOT EXISTS attendance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,7 +28,7 @@ def init_db():
             nama TEXT,
             nim TEXT,
             action TEXT,
-            timestamp DATETIME
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     conn.commit()
@@ -28,7 +39,49 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-# --- ROUTES ---
+# --- API ENDPOINTS ---
+
+@app.route('/tap', methods=['POST'])
+def tap():
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON data provided"}), 400
+            
+        uid = data.get('uid')
+        nama = data.get('nama')
+        nim = data.get('nim')
+        action = data.get('action') # IN, OUT, DENIED
+
+        # Basic Validation
+        if not uid or action not in ['IN', 'OUT', 'DENIED']:
+            return jsonify({"status": "error", "message": "Invalid data (missing uid or invalid action)"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Save/Update User (if not denied/generic error)
+        # INSERT OR IGNORE avoids crashing if user exists; valid for simple logging
+        if uid and nama and nim:
+             cursor.execute('INSERT OR IGNORE INTO users (uid, nama, nim) VALUES (?, ?, ?)', (uid, nama, nim))
+
+        # 2. Log Attendance
+        # timestamp is handled by DEFAULT CURRENT_TIMESTAMP (UTC)
+        cursor.execute('''
+            INSERT INTO attendance (uid, nama, nim, action) 
+            VALUES (?, ?, ?, ?)
+        ''', (uid, nama, nim, action))
+        
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "ok"}), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# --- DASHBOARD ROUTES ---
 
 @app.route('/')
 def index():
