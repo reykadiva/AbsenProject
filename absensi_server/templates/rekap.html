@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h4 class="mb-0">Rekapitulasi Kehadiran</h4>
+        <p class="text-muted small">Total kehadiran berdasarkan jumlah Tap IN.</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <button onclick="exportTableToCSV('rekap_absensi.csv')" class="btn btn-outline-success btn-sm">
+            📥 Export CSV
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0" id="table-rekap">
+                <thead>
+                    <tr>
+                        <th scope="col">Nama Mahasiswa</th>
+                        <th scope="col">NIM</th>
+                        <th scope="col" class="text-center">Total Hadir (Tap IN)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in summary %}
+                    <tr>
+                        <td class="fw-medium">{{ item.nama }}</td>
+                        <td>{{ item.nim }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-primary rounded-pill px-3">{{ item.total_in }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center py-4 text-muted">Belum ada data rekapitulasi.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
