@@ -4,7 +4,11 @@ import os
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-DB_NAME = "absensi.db"
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "absensi.db")
+
 
 # Database Initialization
 def init_db():
@@ -61,10 +65,10 @@ def tap():
         if not data:
             return jsonify({"status": "error", "message": "No JSON data provided"}), 400
             
-        uid = data.get('uid')
-        nama = data.get('nama')
-        nim = data.get('nim')
-        action = data.get('action') # IN, OUT, DENIED
+        uid = (data.get('uid') or '').strip().upper()
+        nama = (data.get('nama') or '').strip()
+        nim  = (data.get('nim') or '').strip()
+        action = (data.get('action') or '').strip().upper() # IN, OUT, DENIED
         
         # V2.5: Optional face verification status from face reco server
         face_status = data.get('face_status', 'UNKNOWN') 
