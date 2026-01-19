@@ -7,11 +7,11 @@ StartLimitIntervalSec=0
 Type=simple
 Restart=always
 RestartSec=5
-User=pi
-WorkingDirectory=/home/pi/AbsenProject
+User=raspberry
+WorkingDirectory=/home/raspberry/AbsenProject
 # Headless mode: No display needed
 # Environment="DISPLAY=:0"
-ExecStart=/usr/bin/python3 /home/pi/AbsenProject/absensi_server/face/verify.py
+ExecStart=/usr/bin/python3 /home/raspberry/AbsenProject/absensi_server/face/verify.py
 
 [Install]
 WantedBy=multi-user.target

@@ -162,6 +162,7 @@ def monitor():
         INNER JOIN (
             SELECT uid, MAX(id) as max_id
             FROM attendance
+            WHERE action != 'FACE_LOG'
             GROUP BY uid
         ) b ON a.uid = b.uid AND a.id = b.max_id
         ORDER BY a.id DESC
@@ -187,7 +188,7 @@ def log():
     date_filter = request.args.get('date', 'all')
     
     # Base Query - V2.5: Added face_status
-    query = "SELECT id, uid, nama, nim, action, face_status, datetime(timestamp, 'localtime') as timestamp FROM attendance WHERE 1=1"
+    query = "SELECT id, uid, nama, nim, action, face_status, datetime(timestamp, 'localtime') as timestamp FROM attendance WHERE action != 'FACE_LOG'"
     params = []
 
     # Search Logic
