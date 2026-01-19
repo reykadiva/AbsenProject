@@ -16,7 +16,7 @@ if not os.path.exists(CASCADE_PATH):
 MODEL_PATH = os.path.join(BASE_DIR, "model", "lbph_model.xml")
 LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 
-CONFIDENCE_THRESHOLD = 50.0  # Tightened: < 50 is strict. < 70 is loose.
+CONFIDENCE_THRESHOLD = 35.0  # Ultra Strict: < 35 is very secure.
 DEBOUNCE_SECONDS = 3.0       # Jeda waktu antar log untuk user yang sama
 
 # SET TO True for Raspberry Pi Headless (No Monitor)
@@ -86,58 +86,68 @@ print("Press 'q' to quit.\n")
 
 last_log_time = {} # {uid: timestamp}
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        time.sleep(0.1)
-        continue
+    last_logged_status = "UNKNOWN" # State tracker
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.1)
+            continue
 
-    for (x, y, w, h) in faces:
-        # Visual
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-        
-        # Predict
-        face_roi = gray[y:y+h, x:x+w]
-        try:
-            label, confidence = recognizer.predict(face_roi)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+
+        # 1. Logic Wajah Hilang -> Reset Status
+        if len(faces) == 0:
+            if last_logged_status != "UNKNOWN":
+                # Wajah hilang, kita anggap unknown
+                last_logged_status = "UNKNOWN"
             
-            # Logic Klasifikasi
-            # LBPH: Confidence 0 = Perfect Match. Confidence > 80-100 = Unknown.
-            if confidence < CONFIDENCE_THRESHOLD:
-                uid_found = label_to_uid.get(label, "Unknown")
-                status = "MATCH"
-                color = (0, 255, 0)
-            else:
-                uid_found = "UNKNOWN"
-                status = "MISMATCH"
-                color = (0, 0, 255)
+            # Hemat CPU
+            if HEADLESS: time.sleep(0.05)
 
-            # Display Text
-            text = f"{uid_found} ({round(confidence)})"
-            cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-            # --- LOGGING LOGIC ---
-            now = time.time()
+        for (x, y, w, h) in faces:
+            # Visual
+            if not HEADLESS:
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
             
-            # Cek debounce: Apakah user ini baru saja dilog?
-            # Kita log jika: (UID dikenal) ATAU (Unknown tapi sudah lewat debounce)
-            should_log = False
-            
-            if uid_found in last_log_time:
-                if now - last_log_time[uid_found] > DEBOUNCE_SECONDS:
-                    should_log = True
-            else:
-                should_log = True
+            # Predict
+            face_roi = gray[y:y+h, x:x+w]
+            try:
+                label, confidence = recognizer.predict(face_roi)
+                
+                # Logic Klasifikasi
+                if confidence < CONFIDENCE_THRESHOLD:
+                    uid_found = label_to_uid.get(label, "Unknown")
+                    status = "MATCH"
+                    color = (0, 255, 0)
+                else:
+                    uid_found = "UNKNOWN"
+                    status = "MISMATCH"
+                    color = (0, 0, 255)
 
-            if should_log:
-                log_face_event(uid_found, "Auto-Detect", status)
-                last_log_time[uid_found] = now
+                # Display Text
+                if not HEADLESS:
+                    text = f"{uid_found} ({round(confidence)})"
+                    cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-        except Exception as e:
-            print(f"Error predict: {e}")
+                # --- LOGGING LOGIC UPDATE ---
+                now = time.time()
+                
+                # Cek apakah status berubah drastis? (Misal UNKNOWN -> MATCH)
+                is_status_change = (status != last_logged_status)
+                
+                # Cek debounce
+                last_ts = last_log_time.get(uid_found, 0)
+                is_debounce_pass = (now - last_ts > DEBOUNCE_SECONDS)
+
+                if is_status_change or is_debounce_pass:
+                    log_face_event(uid_found, "Auto-Detect", status)
+                    last_log_time[uid_found] = now
+                    last_logged_status = status # Update status terakhir
+
+            except Exception as e:
+                print(f"Error predict: {e}")
 
     if not HEADLESS:
         cv2.imshow("WebAbsen Face Monitor", frame)
