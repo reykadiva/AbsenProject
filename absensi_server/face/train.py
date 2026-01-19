@@ -2,17 +2,20 @@ import cv2
 import os
 import numpy as np
 
-DATASET_DIR = "face/dataset"
-MODEL_DIR = "face/model"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_DIR = os.path.join(BASE_DIR, "dataset")
+MODEL_DIR = os.path.join(BASE_DIR, "model")
+
 MODEL_PATH = os.path.join(MODEL_DIR, "lbph_model.xml")
 LABELS_PATH = os.path.join(MODEL_DIR, "labels.txt")
 
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Ambil semua UID (folder)
+# Pastikan yang diambil hanya folder valid
 uids = sorted([
     d for d in os.listdir(DATASET_DIR)
-    if os.path.isdir(os.path.join(DATASET_DIR, d))
+    if os.path.isdir(os.path.join(DATASET_DIR, d)) and not d.startswith(".")
 ])
 
 if not uids:

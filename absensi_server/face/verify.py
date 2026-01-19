@@ -1,79 +1,141 @@
 import cv2
 import os
+import sqlite3
+import time
+import sys
 
-CASCADE_PATH = "face/cascades/haarcascade_frontalface_default.xml"
-MODEL_PATH = "face/model/lbph_model.xml"
-LABELS_PATH = "face/model/labels.txt"
+# --- CONFIG ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR) # Naik satu level ke absensi_server
+DB_PATH = os.path.join(PROJECT_ROOT, "absensi.db")
 
-target_uid = input("Masukkan UID target (contoh 3A:7D:CA:06): ").strip().upper()
+CASCADE_PATH = os.path.join(BASE_DIR, "cascades", "haarcascade_frontalface_default.xml")
+if not os.path.exists(CASCADE_PATH):
+    CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 
-# Load label map
-label_to_uid = {}
-with open(LABELS_PATH, "r") as f:
-    for line in f:
-        label, uid = line.strip().split(",", 1)
-        label_to_uid[int(label)] = uid
+MODEL_PATH = os.path.join(BASE_DIR, "model", "lbph_model.xml")
+LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 
-# Load model
+CONFIDENCE_THRESHOLD = 70.0  # LBPH: Lower is better. < 50 is very good. < 70 is acceptable.
+DEBOUNCE_SECONDS = 3.0       # Jeda waktu antar log untuk user yang sama
+
+# --- DATABASE SETUP ---
+def log_face_event(uid, name, status):
+    """
+    Mencatat event wajah ke database agar bisa dibaca oleh server.py saat Tap Kartu.
+    Kita log dengan action='FACE_LOG' (dummy) atau biarkan action kosong, 
+    yang penting face_status terisi.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Insert event
+        cursor.execute('''
+            INSERT INTO attendance (uid, nama, nim, action, face_status) 
+            VALUES (?, ?, ?, ?, ?)
+        ''', (uid, name, "-", "FACE_LOG", status))
+        
+        conn.commit()
+        conn.close()
+        print(f"[DB] Logged: {uid} | {status}")
+    except Exception as e:
+        print(f"[DB ERROR] {e}")
+
+# --- LOAD RESOURCES ---
+print("Loading model...")
 if not hasattr(cv2, "face"):
-    raise RuntimeError("cv2.face tidak tersedia.")
+    raise RuntimeError("cv2.face tidak tersedia. Install opencv-contrib-python.")
 
 recognizer = cv2.face.LBPHFaceRecognizer_create()
-recognizer.read(MODEL_PATH)
+try:
+    recognizer.read(MODEL_PATH)
+except:
+    raise RuntimeError(f"Gagal load model dari {MODEL_PATH}. Pastikan sudah training!")
 
-# Load cascade
+label_to_uid = {}
+if os.path.exists(LABELS_PATH):
+    with open(LABELS_PATH, "r") as f:
+        for line in f:
+            parts = line.strip().split(",", 1)
+            if len(parts) == 2:
+                label_to_uid[int(parts[0])] = parts[1]
+else:
+    print("WARNING: labels.txt tidak ditemukan.")
+
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 if face_cascade.empty():
     raise RuntimeError("Haarcascade gagal diload.")
 
+# --- MAIN LOOP ---
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
-    raise RuntimeError("Webcam tidak bisa dibuka.")
+    print("Mencoba kamera index 1...")
+    cap = cv2.VideoCapture(1)
 
-print("\nINSTRUKSI:")
-print("- Hadap kamera")
-print("- Tekan SPACE untuk verify")
-print("- Tekan Q untuk keluar\n")
+print("\n=== FACE MONITOR RUNNING ===")
+print(f"Database: {DB_PATH}")
+print("Press 'q' to quit.\n")
+
+last_log_time = {} # {uid: timestamp}
 
 while True:
     ret, frame = cap.read()
     if not ret:
+        time.sleep(0.1)
         continue
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, 1.2, 5)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
 
     for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (255,255,255), 2)
+        # Visual
+        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        
+        # Predict
+        face_roi = gray[y:y+h, x:x+w]
+        try:
+            label, confidence = recognizer.predict(face_roi)
+            
+            # Logic Klasifikasi
+            # LBPH: Confidence 0 = Perfect Match. Confidence > 80-100 = Unknown.
+            if confidence < CONFIDENCE_THRESHOLD:
+                uid_found = label_to_uid.get(label, "Unknown")
+                status = "MATCH"
+                color = (0, 255, 0)
+            else:
+                uid_found = "UNKNOWN"
+                status = "MISMATCH"
+                color = (0, 0, 255)
 
-    cv2.imshow("VERIFY FACE", frame)
-    key = cv2.waitKey(1) & 0xFF
+            # Display Text
+            text = f"{uid_found} ({round(confidence)})"
+            cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-    if key == ord('q'):
+            # --- LOGGING LOGIC ---
+            now = time.time()
+            
+            # Cek debounce: Apakah user ini baru saja dilog?
+            # Kita log jika: (UID dikenal) ATAU (Unknown tapi sudah lewat debounce)
+            should_log = False
+            
+            if uid_found in last_log_time:
+                if now - last_log_time[uid_found] > DEBOUNCE_SECONDS:
+                    should_log = True
+            else:
+                should_log = True
+
+            if should_log:
+                log_face_event(uid_found, "Auto-Detect", status)
+                last_log_time[uid_found] = now
+
+        except Exception as e:
+            print(f"Error predict: {e}")
+
+    cv2.imshow("WebAbsen Face Monitor", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-
-    if key == 32:  # SPACE
-        if len(faces) == 0:
-            print("❌ Tidak ada wajah terdeteksi")
-            continue
-
-        # Ambil wajah terbesar
-        faces_sorted = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
-        x, y, w, h = faces_sorted[0]
-        face = gray[y:y+h, x:x+w]
-        face = cv2.resize(face, (200, 200))
-
-        label, confidence = recognizer.predict(face)
-        predicted_uid = label_to_uid.get(label, "UNKNOWN")
-
-        print("\nHasil prediksi:")
-        print("Predicted UID :", predicted_uid)
-        print("Confidence    :", confidence)
-
-        if predicted_uid == target_uid:
-            print("✅ MATCH (wajah cocok)")
-        else:
-            print("❌ MISMATCH (wajah tidak cocok)")
 
 cap.release()
 cv2.destroyAllWindows()

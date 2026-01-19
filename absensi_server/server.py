@@ -82,8 +82,32 @@ def tap():
 
         # 1. Save/Update User (if not denied/generic error)
         # INSERT OR IGNORE avoids crashing if user exists; valid for simple logging
+
+        # DEBUG: Log incoming payload
+        print(f"[TAP] Payload: {data}")
+
+        # 1. Save/Update User (if not denied/generic error)
+        # INSERT OR IGNORE avoids crashing if user exists; valid for simple logging
         if uid and nama and nim:
              cursor.execute('INSERT OR IGNORE INTO users (uid, nama, nim) VALUES (?, ?, ?)', (uid, nama, nim))
+
+        # SYNC FIX: If face_status is UNKNOWN, check if we have a recent (30s) record with a valid status
+        # This handles cases where Face Rec writes to DB *before* the ESP32 tap
+        if face_status == 'UNKNOWN':
+            try:
+                recent_face_row = conn.execute('''
+                    SELECT face_status FROM attendance 
+                    WHERE uid = ? 
+                      AND timestamp >= datetime('now', '-30 seconds')
+                      AND face_status IN ('MATCH', 'MISMATCH')
+                    ORDER BY id DESC LIMIT 1
+                ''', (uid,)).fetchone()
+                
+                if recent_face_row:
+                    face_status = recent_face_row['face_status']
+                    print(f"[SYNC] Resolved UNKNOWN -> {face_status} for {uid}")
+            except Exception as ex:
+                print(f"[SYNC WARNING] Failed to lookup recent face: {ex}")
 
         # 2. Log Attendance
         # timestamp is handled by DEFAULT CURRENT_TIMESTAMP (UTC)
@@ -91,6 +115,7 @@ def tap():
             INSERT INTO attendance (uid, nama, nim, action, face_status) 
             VALUES (?, ?, ?, ?, ?)
         ''', (uid, nama, nim, action, face_status))
+
         
         conn.commit()
         conn.close()

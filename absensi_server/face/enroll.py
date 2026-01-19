@@ -1,18 +1,37 @@
-import cv2, os
+import cv2, os, sys
 
-uid = input("Masukkan UID (contoh AA:BB:CC:DD): ").strip().upper()
-save_dir = f"face/dataset/{uid}"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def sanitize_uid(raw_uid):
+    return raw_uid.replace(":", "-").strip().upper()
+
+raw_input_uid = input("Masukkan UID (contoh AA:BB:CC:DD): ")
+uid = sanitize_uid(raw_input_uid)
+
+print(f"Menggunakan UID Folder: {uid}")
+
+save_dir = os.path.join(BASE_DIR, "dataset", uid)
 os.makedirs(save_dir, exist_ok=True)
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
-    raise RuntimeError("Webcam tidak kebuka. Pastikan /dev/video0 ada.")
+    print("WARNING: Webcam default (0) gagal. Mencoba index 1...")
+    cap = cv2.VideoCapture(1)
+    if not cap.isOpened():
+        raise RuntimeError("Webcam tidak kebuka. Cek koneksi kamera.")
 
-CASCADE_PATH = "face/cascades/haarcascade_frontalface_default.xml"
+# Try standard path first, then fallback to built-in OpenCV path
+local_cascade = os.path.join(BASE_DIR, "cascades", "haarcascade_frontalface_default.xml")
+if os.path.exists(local_cascade):
+    CASCADE_PATH = local_cascade
+else:
+    # Use built-in OpenCV classifier data
+    CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
 if face_cascade.empty():
-    raise RuntimeError("Haarcascade tidak bisa diload. Cek path XML.")
+    raise RuntimeError(f"Haarcascade gagal load dari: {CASCADE_PATH}")
 
 count = 0
 target = 30
