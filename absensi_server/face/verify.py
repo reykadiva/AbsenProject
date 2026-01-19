@@ -65,7 +65,7 @@ except Exception as e:
 
 # --- INIT CAMERA & CASCADE ---
 # Use local cascade file
-cascade_path = os.path.join(BASE_DIR, "..", "cascades", "haarcascade_frontalface_default.xml")
+cascade_path = os.path.join(BASE_DIR, "cascades", "haarcascade_frontalface_default.xml")
 
 face_cascade = cv2.CascadeClassifier(cascade_path)
 if face_cascade.empty():
