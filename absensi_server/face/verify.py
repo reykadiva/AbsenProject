@@ -10,7 +10,7 @@ DB_PATH = os.path.join(BASE_DIR, "..", "absensi.db")
 MODEL_PATH = os.path.join(BASE_DIR, "model", "lbph_model.xml")
 LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 
-CONFIDENCE_THRESHOLD = 45.0  # Slightly relaxed (was 35.0)
+CONFIDENCE_THRESHOLD = 60.0  # Relaxed for better recall (was 45.0)
 DEBOUNCE_SECONDS = 3.0       # Jeda log yang sama
 
 # SET TO True for Raspberry Pi Headless (No Monitor)
@@ -131,7 +131,15 @@ while True:
                 uid_found = uid_found_temp
                 status = "MATCH"
                 color = (0, 255, 0)
+            elif confidence < (CONFIDENCE_THRESHOLD + 20.0):
+                # GRAY AREA LOGIC (Fix Ghost Match)
+                # If score is slightly bad (e.g. 50 vs 45), log it as "Reyka: MISMATCH"
+                # instead of "UNKNOWN". This forces Server to see the latest status.
+                uid_found = uid_found_temp
+                status = "MISMATCH"
+                color = (0, 165, 255) # Orange
             else:
+                # Totally unknown / stranger
                 uid_found = "UNKNOWN"
                 status = "MISMATCH"
                 color = (0, 0, 255)

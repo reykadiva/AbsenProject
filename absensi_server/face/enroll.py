@@ -34,7 +34,7 @@ if face_cascade.empty():
     raise RuntimeError(f"Haarcascade gagal load dari: {CASCADE_PATH}")
 
 count = 0
-target = 75  # Target dinaikkan untuk akurasi lebih baik
+target = 120  # Target dinaikkan (Rekomendasi: 120-150)
 
 print("\n=== AUTO ENROLL MODE ===")
 print(f"- Target: {target} foto")
