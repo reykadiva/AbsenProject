@@ -86,9 +86,9 @@ print("Press 'q' to quit.\n")
 
 last_log_time = {} # {uid: timestamp}
 
-    last_logged_status = "UNKNOWN" # State tracker
+last_logged_status = "UNKNOWN" # State tracker
 
-    while True:
+while True:
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.1)
