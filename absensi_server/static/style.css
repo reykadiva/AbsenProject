@@ -2,6 +2,7 @@
 body {
     font-family: 'Roboto', sans-serif;
     color: #333;
+    background-color: #f8f9fa;
 }
 
 /* Navbar Customization */
@@ -21,20 +22,17 @@ body {
 .nav-link.active {
     text-decoration: underline;
     text-underline-offset: 5px;
+    font-weight: 700;
 }
 
 /* Card Styling */
 .card {
     border: none;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
 }
 
 .card-header {
-    background-color: #fff;
-    border-bottom: 2px solid #f0f0f0;
-    font-weight: 700;
-    color: #444;
+    border-bottom: 1px solid #eee;
 }
 
 /* Table Enhancements */
@@ -43,8 +41,7 @@ body {
     text-transform: uppercase;
     font-size: 0.85rem;
     color: #666;
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
+    letter-spacing: 0.5px;
 }
 
 .table td {
@@ -52,43 +49,46 @@ body {
     font-size: 0.95rem;
 }
 
-/* Status Badges */
-.badge-in {
+/* Face Recognition Badges */
+.badge-match {
     background-color: #d1e7dd;
     color: #0f5132;
-    padding: 0.5em 0.8em;
+    padding: 0.4em 0.8em;
     border-radius: 4px;
     font-weight: 600;
+    border: 1px solid #badbcc;
 }
 
-.badge-out {
-    background-color: #fff3cd;
-    color: #664d03;
-    padding: 0.5em 0.8em;
-    border-radius: 4px;
-    font-weight: 600;
-}
-
-.badge-denied {
+.badge-mismatch {
     background-color: #f8d7da;
     color: #842029;
-    padding: 0.5em 0.8em;
+    padding: 0.4em 0.8em;
     border-radius: 4px;
     font-weight: 600;
+    border: 1px solid #f5c2c7;
 }
 
-/* Row Highlights */
-.row-denied {
-    background-color: #fff5f5 !important;
+.badge-unknown {
+    background-color: #e2e3e5;
+    color: #41464b;
+    padding: 0.4em 0.8em;
+    border-radius: 4px;
+    font-weight: 600;
+    border: 1px solid #d3d6d8;
+}
+
+.row-mismatch {
+    background-color: #fff8f8 !important;
 }
 
 /* Utility */
-.refresh-indicator {
-    font-size: 0.8rem;
-    color: #888;
-    display: flex;
-    align-items: center;
-    gap: 5px;
+.cursor-pointer {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.cursor-pointer:hover {
+    background-color: #f1f3f5 !important;
 }
 
 .pulsate {
@@ -98,13 +98,23 @@ body {
 @keyframes pulsate {
     0% {
         opacity: 0.5;
+        transform: scale(0.95);
     }
 
     50% {
         opacity: 1;
+        transform: scale(1.05);
     }
 
     100% {
         opacity: 0.5;
+        transform: scale(0.95);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .table-responsive {
+        border: 0;
     }
 }
