@@ -10,7 +10,7 @@ DB_PATH = os.path.join(BASE_DIR, "..", "absensi.db")
 MODEL_PATH = os.path.join(BASE_DIR, "model", "lbph_model.xml")
 LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 
-CONFIDENCE_THRESHOLD = 35.0  # Strict threshold (< 35 is very secure)
+CONFIDENCE_THRESHOLD = 45.0  # Slightly relaxed (was 35.0)
 DEBOUNCE_SECONDS = 3.0       # Jeda log yang sama
 
 # SET TO True for Raspberry Pi Headless (No Monitor)
@@ -124,8 +124,11 @@ while True:
             label, confidence = recognizer.predict(face_roi)
             
             # Logic Klasifikasi
+            uid_found_temp = label_to_uid.get(label, "Unknown")
+            print(f"[DEBUG] Pred: {uid_found_temp} | Score: {round(confidence, 1)} | Thr: {CONFIDENCE_THRESHOLD}")
+
             if confidence < CONFIDENCE_THRESHOLD:
-                uid_found = label_to_uid.get(label, "Unknown")
+                uid_found = uid_found_temp
                 status = "MATCH"
                 color = (0, 255, 0)
             else:
