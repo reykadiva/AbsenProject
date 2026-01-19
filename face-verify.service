@@ -1,0 +1,17 @@
+[Unit]
+Description=WebAbsen Face Verification Service
+After=network.target video.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=pi
+WorkingDirectory=/home/pi/AbsenProject
+# Headless mode: No display needed
+# Environment="DISPLAY=:0"
+ExecStart=/usr/bin/python3 /home/pi/AbsenProject/absensi_server/face/verify.py
+
+[Install]
+WantedBy=multi-user.target

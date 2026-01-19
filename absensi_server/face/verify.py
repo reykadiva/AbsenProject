@@ -19,6 +19,9 @@ LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 CONFIDENCE_THRESHOLD = 70.0  # LBPH: Lower is better. < 50 is very good. < 70 is acceptable.
 DEBOUNCE_SECONDS = 3.0       # Jeda waktu antar log untuk user yang sama
 
+# SET TO True for Raspberry Pi Headless (No Monitor)
+HEADLESS = True 
+
 # --- DATABASE SETUP ---
 def log_face_event(uid, name, status):
     """
@@ -136,10 +139,13 @@ while True:
         except Exception as e:
             print(f"Error predict: {e}")
 
-    cv2.imshow("WebAbsen Face Monitor", frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    if not HEADLESS:
+        cv2.imshow("WebAbsen Face Monitor", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    else:
+        # Hemat CPU saat headless
+        time.sleep(0.01)
 
 cap.release()
 cv2.destroyAllWindows()
