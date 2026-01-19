@@ -26,6 +26,10 @@ def log_face_event(uid, name, status):
     Kita log dengan action='FACE_LOG' (dummy) atau biarkan action kosong, 
     yang penting face_status terisi.
     """
+    # CRITICAL FIX: Convert filename format (dash) back to ESP32 format (colon)
+    # Folder: AA-BB-CC-DD -> DB: AA:BB:CC:DD
+    db_uid = uid.replace("-", ":")
+
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -34,11 +38,11 @@ def log_face_event(uid, name, status):
         cursor.execute('''
             INSERT INTO attendance (uid, nama, nim, action, face_status) 
             VALUES (?, ?, ?, ?, ?)
-        ''', (uid, name, "-", "FACE_LOG", status))
+        ''', (db_uid, name, "-", "FACE_LOG", status))
         
         conn.commit()
         conn.close()
-        print(f"[DB] Logged: {uid} | {status}")
+        print(f"[DB] Logged: {db_uid} (from {uid}) | {status}")
     except Exception as e:
         print(f"[DB ERROR] {e}")
 
