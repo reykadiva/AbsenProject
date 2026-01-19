@@ -64,14 +64,12 @@ except Exception as e:
     sys.exit(1)
 
 # --- INIT CAMERA & CASCADE ---
-# Use OpenCV built-in cascade or fallback to local
-cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-if not os.path.exists(cascade_path):
-    cascade_path = os.path.join(BASE_DIR, "..", "cascades", "haarcascade_frontalface_default.xml")
+# Use local cascade file
+cascade_path = os.path.join(BASE_DIR, "..", "cascades", "haarcascade_frontalface_default.xml")
 
 face_cascade = cv2.CascadeClassifier(cascade_path)
 if face_cascade.empty():
-    print("[CRITICAL] Haarcascade failed to load.")
+    print(f"[CRITICAL] Haarcascade failed to load from: {cascade_path}")
     sys.exit(1)
 
 cap = cv2.VideoCapture(0)
