@@ -16,7 +16,7 @@ if not os.path.exists(CASCADE_PATH):
 MODEL_PATH = os.path.join(BASE_DIR, "model", "lbph_model.xml")
 LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 
-CONFIDENCE_THRESHOLD = 70.0  # LBPH: Lower is better. < 50 is very good. < 70 is acceptable.
+CONFIDENCE_THRESHOLD = 50.0  # Tightened: < 50 is strict. < 70 is loose.
 DEBOUNCE_SECONDS = 3.0       # Jeda waktu antar log untuk user yang sama
 
 # SET TO True for Raspberry Pi Headless (No Monitor)
