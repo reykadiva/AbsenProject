@@ -6,30 +6,23 @@ import sys
 
 # --- CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(BASE_DIR) # Naik satu level ke absensi_server
-DB_PATH = os.path.join(PROJECT_ROOT, "absensi.db")
-
-CASCADE_PATH = os.path.join(BASE_DIR, "cascades", "haarcascade_frontalface_default.xml")
-if not os.path.exists(CASCADE_PATH):
-    CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-
+DB_PATH = os.path.join(BASE_DIR, "..", "absensi.db")
 MODEL_PATH = os.path.join(BASE_DIR, "model", "lbph_model.xml")
 LABELS_PATH = os.path.join(BASE_DIR, "model", "labels.txt")
 
-CONFIDENCE_THRESHOLD = 35.0  # Ultra Strict: < 35 is very secure.
-DEBOUNCE_SECONDS = 3.0       # Jeda waktu antar log untuk user yang sama
+CONFIDENCE_THRESHOLD = 35.0  # Strict threshold (< 35 is very secure)
+DEBOUNCE_SECONDS = 3.0       # Jeda log yang sama
 
 # SET TO True for Raspberry Pi Headless (No Monitor)
+# Change to False if you want to debug with GUI window
 HEADLESS = True 
 
-# --- DATABASE SETUP ---
+# --- DATABASE LOGGING FUNCTION ---
 def log_face_event(uid, name, status):
     """
     Mencatat event wajah ke database agar bisa dibaca oleh server.py saat Tap Kartu.
-    Kita log dengan action='FACE_LOG' (dummy) atau biarkan action kosong, 
-    yang penting face_status terisi.
     """
-    # CRITICAL FIX: Convert filename format (dash) back to ESP32 format (colon)
+    # Fix: Convert filename format (dash) back to ESP32 format (colon)
     # Folder: AA-BB-CC-DD -> DB: AA:BB:CC:DD
     db_uid = uid.replace("-", ":")
 
@@ -45,116 +38,138 @@ def log_face_event(uid, name, status):
         
         conn.commit()
         conn.close()
-        print(f"[DB] Logged: {db_uid} (from {uid}) | {status}")
+        print(f"[DB] Logged: {db_uid} | {status}")
     except Exception as e:
         print(f"[DB ERROR] {e}")
 
 # --- LOAD RESOURCES ---
-print("Loading model...")
-if not hasattr(cv2, "face"):
-    raise RuntimeError("cv2.face tidak tersedia. Install opencv-contrib-python.")
-
-recognizer = cv2.face.LBPHFaceRecognizer_create()
 try:
-    recognizer.read(MODEL_PATH)
-except:
-    raise RuntimeError(f"Gagal load model dari {MODEL_PATH}. Pastikan sudah training!")
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(LABELS_PATH):
+        raise RuntimeError(f"Model/Labels not found at {MODEL_PATH}")
 
-label_to_uid = {}
-if os.path.exists(LABELS_PATH):
+    print(f"Loading model: {MODEL_PATH}")
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer.read(MODEL_PATH)
+
+    label_to_uid = {}
+    print(f"Loading labels: {LABELS_PATH}")
     with open(LABELS_PATH, "r") as f:
         for line in f:
             parts = line.strip().split(",", 1)
             if len(parts) == 2:
                 label_to_uid[int(parts[0])] = parts[1]
-else:
-    print("WARNING: labels.txt tidak ditemukan.")
+    
+except Exception as e:
+    print(f"[CRITICAL] Failed to load resources: {e}")
+    sys.exit(1)
 
-face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
+# --- INIT CAMERA & CASCADE ---
+# Use OpenCV built-in cascade or fallback to local
+cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+if not os.path.exists(cascade_path):
+    cascade_path = os.path.join(BASE_DIR, "..", "cascades", "haarcascade_frontalface_default.xml")
+
+face_cascade = cv2.CascadeClassifier(cascade_path)
 if face_cascade.empty():
-    raise RuntimeError("Haarcascade gagal diload.")
+    print("[CRITICAL] Haarcascade failed to load.")
+    sys.exit(1)
 
-# --- MAIN LOOP ---
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
-    print("Mencoba kamera index 1...")
+    print("Webcam index 0 failed, trying index 1...")
     cap = cv2.VideoCapture(1)
+    if not cap.isOpened():
+        print("[CRITICAL] No camera found.")
+        sys.exit(1)
 
 print("\n=== FACE MONITOR RUNNING ===")
-print(f"Database: {DB_PATH}")
-print("Press 'q' to quit.\n")
+print(f"Threshold: {CONFIDENCE_THRESHOLD}")
+print(f"Headless: {HEADLESS}")
+print("Press 'q' to quit (if GUI enabled).\n")
 
+# --- MAIN LOOP ---
 last_log_time = {} # {uid: timestamp}
-
-last_logged_status = "UNKNOWN" # State tracker
+last_logged_status = "UNKNOWN"
 
 while True:
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(0.1)
-            continue
+    ret, frame = cap.read()
+    if not ret:
+        time.sleep(0.1)
+        continue
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(
+        gray, 
+        scaleFactor=1.2, 
+        minNeighbors=5, 
+        minSize=(30, 30)
+    )
 
-        # 1. Logic Wajah Hilang -> Reset Status
-        if len(faces) == 0:
-            if last_logged_status != "UNKNOWN":
-                # Wajah hilang, kita anggap unknown
-                last_logged_status = "UNKNOWN"
+    # 1. Logic Wajah Hilang -> Reset Status Local
+    if len(faces) == 0:
+        if last_logged_status != "UNKNOWN":
+            last_logged_status = "UNKNOWN"
+            # print("Face lost. Reset status.")
+        
+        # Hemat CPU saat idle
+        if HEADLESS:
+            time.sleep(0.05)
+
+    for (x, y, w, h) in faces:
+        # Visual Box
+        if not HEADLESS:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        
+        # Predict
+        face_roi = gray[y:y+h, x:x+w]
+        try:
+            label, confidence = recognizer.predict(face_roi)
             
-            # Hemat CPU
-            if HEADLESS: time.sleep(0.05)
+            # Logic Klasifikasi
+            if confidence < CONFIDENCE_THRESHOLD:
+                uid_found = label_to_uid.get(label, "Unknown")
+                status = "MATCH"
+                color = (0, 255, 0)
+            else:
+                uid_found = "UNKNOWN"
+                status = "MISMATCH"
+                color = (0, 0, 255)
 
-        for (x, y, w, h) in faces:
-            # Visual
+            # Display Text
             if not HEADLESS:
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                text = f"{uid_found} ({round(confidence)})"
+                cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+            # --- LOGGING LOGIC ---
+            now = time.time()
             
-            # Predict
-            face_roi = gray[y:y+h, x:x+w]
-            try:
-                label, confidence = recognizer.predict(face_roi)
-                
-                # Logic Klasifikasi
-                if confidence < CONFIDENCE_THRESHOLD:
-                    uid_found = label_to_uid.get(label, "Unknown")
-                    status = "MATCH"
-                    color = (0, 255, 0)
+            # Log jika:
+            # 1. Status wajah BERUBAH (Contoh: UNKNOWN -> MATCH)
+            # 2. Atau Debounce time sudah lewat (Update berkala)
+            is_status_change = (status != last_logged_status)
+            last_ts = last_log_time.get(uid_found, 0)
+            is_debounce_pass = (now - last_ts > DEBOUNCE_SECONDS)
+
+            if is_status_change or is_debounce_pass:
+                # Hindari log spam "UNKNOWN" terus menerus
+                # Log UNKNOWN hanya jika sebelumnya MATCH/MISMATCH (status change)
+                if status == "UNKNOWN" and not is_status_change:
+                    pass 
                 else:
-                    uid_found = "UNKNOWN"
-                    status = "MISMATCH"
-                    color = (0, 0, 255)
-
-                # Display Text
-                if not HEADLESS:
-                    text = f"{uid_found} ({round(confidence)})"
-                    cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-                # --- LOGGING LOGIC UPDATE ---
-                now = time.time()
-                
-                # Cek apakah status berubah drastis? (Misal UNKNOWN -> MATCH)
-                is_status_change = (status != last_logged_status)
-                
-                # Cek debounce
-                last_ts = last_log_time.get(uid_found, 0)
-                is_debounce_pass = (now - last_ts > DEBOUNCE_SECONDS)
-
-                if is_status_change or is_debounce_pass:
                     log_face_event(uid_found, "Auto-Detect", status)
                     last_log_time[uid_found] = now
-                    last_logged_status = status # Update status terakhir
+                    last_logged_status = status
 
-            except Exception as e:
-                print(f"Error predict: {e}")
+        except Exception as e:
+            print(f"Error predict: {e}")
 
+    # GUI handling
     if not HEADLESS:
         cv2.imshow("WebAbsen Face Monitor", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     else:
-        # Hemat CPU saat headless
+        # Sleep kecil di mode headless agar loop tidak makan CPU 100%
         time.sleep(0.01)
 
 cap.release()
