@@ -58,6 +58,15 @@ def get_db_connection():
 
 # --- API ENDPOINTS ---
 
+# Global Heartbeat Tracker
+last_device_ping = None
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    global last_device_ping
+    last_device_ping = datetime.now()
+    return jsonify({"status": "online", "time": last_device_ping.isoformat()}), 200
+
 @app.route('/tap', methods=['POST'])
 def tap():
     try:
@@ -72,19 +81,12 @@ def tap():
         
         # V2.5: Optional face verification status from face reco server
         face_status = data.get('face_status', 'UNKNOWN') 
-
-        # Basic Validation
-        if not uid or action not in ['IN', 'OUT', 'DENIED']:
-            return jsonify({"status": "error", "message": "Invalid data (missing uid or invalid action)"}), 400
+        
+        # DEBUG: Log incoming payload
+        print(f"[TAP] Payload: {data}")
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # 1. Save/Update User (if not denied/generic error)
-        # INSERT OR IGNORE avoids crashing if user exists; valid for simple logging
-
-        # DEBUG: Log incoming payload
-        print(f"[TAP] Payload: {data}")
 
         # 1. Save/Update User (if not denied/generic error)
         # INSERT OR IGNORE avoids crashing if user exists; valid for simple logging
@@ -120,9 +122,19 @@ def tap():
         conn.commit()
         conn.close()
 
-        return jsonify({"status": "ok"}), 200
+        # Update Heartbeat on tap as well, just in case
+        global last_device_ping
+        last_device_ping = datetime.now()
+
+        # RETURN Face Status to ESP32 for LCD Feedback
+        return jsonify({
+            "status": "ok", 
+            "face_status": face_status,
+            "message": "Absensi Berhasil" if face_status == 'MATCH' else "Wajah Tidak Dikenali"
+        }), 200
 
     except Exception as e:
+        print(f"[ERROR TAP] {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -151,7 +163,15 @@ def monitor():
     '''
     records = conn.execute(query).fetchall()
     conn.close()
-    return render_template('monitor.html', records=records)
+    
+    # Calculate status offline/online based on last ping
+    global last_device_ping
+    seconds_since_ping = 999
+    if last_device_ping:
+        delta = datetime.now() - last_device_ping
+        seconds_since_ping = int(delta.total_seconds())
+        
+    return render_template('monitor.html', records=records, seconds_since_ping=seconds_since_ping)
 
 @app.route('/log')
 def log():

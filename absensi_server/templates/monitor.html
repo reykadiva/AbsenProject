@@ -6,78 +6,89 @@
         <h5 class="mb-0 fw-bold text-primary">
             <span class="me-2">📡</span> Live Monitor Absensi
         </h5>
-        <div class="d-flex align-items-center">
-            <span class="badge bg-success me-2 pulsate">Live</span>
-            <small class="text-muted" id="lastUpdated">Updated: Just now</small>
+        <div class="d-flex align-items-center gap-3">
+            <!-- New: Device Status Indicator -->
+            {% if seconds_since_ping < 15 %} <div class="d-flex align-items-center text-success">
+                <span class="badge bg-success me-2 pulsate">●</span>
+                <span class="fw-bold small">DEVICE ONLINE</span>
         </div>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
-                    <tr>
-                        <th scope="col" class="ps-4">Nama Mahasiswa</th>
-                        <th scope="col">NIM</th>
-                        <th scope="col">UID Kartu</th>
-                        <th scope="col">Verifikasi Wajah</th>
-                        <th scope="col">Status Terakhir</th>
-                        <th scope="col" class="text-end pe-4">Waktu (WIB)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in records %}
-                    <tr class="cursor-pointer"
-                        onclick="window.location='{{ url_for('mahasiswa_detail', uid=row.uid) }}'">
-                        <td class="ps-4 fw-medium">{{ row.nama }}</td>
-                        <td>{{ row.nim }}</td>
-                        <td><code class="text-muted">{{ row.uid }}</code></td>
-                        <td>
-                            {% if row.face_status == 'MATCH' %}
-                            <span class="badge-match">User Matches</span>
-                            {% elif row.face_status == 'MISMATCH' %}
-                            <span class="badge-mismatch">Mismatch</span>
-                            {% else %}
-                            <span class="badge-unknown">Indefinite</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if row.action == 'IN' %}
-                            <span
-                                class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3">
-                                <i class="me-1">⬇</i> MASUK
-                            </span>
-                            {% elif row.action == 'OUT' %}
-                            <span
-                                class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3">
-                                <i class="me-1">⬆</i> KELUAR
-                            </span>
-                            {% elif row.action == 'DENIED' %}
-                            <span
-                                class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3">
-                                <i class="me-1">✖</i> DITOLAK
-                            </span>
-                            {% else %}
-                            <span class="badge bg-light text-dark border">{{ row.action }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end pe-4 text-muted fw-light">
-                            {{ row.timestamp }}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="5" class="text-center py-5 text-muted">
-                            <div class="py-4">
-                                <p class="mb-1" style="font-size: 2rem;">📭</p>
-                                <p>Belum ada aktivitas absensi hari ini.</p>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        {% else %}
+        <div class="d-flex align-items-center text-danger" title="Last seen {{ seconds_since_ping }}s ago">
+            <span class="badge bg-danger me-2">●</span>
+            <span class="fw-bold small">DEVICE OFFLINE</span>
         </div>
+        {% endif %}
+
+        <div class="vr mx-2"></div>
+
+        <small class="text-muted" id="lastUpdated">Updated: Just now</small>
     </div>
+</div>
+<div class="card-body p-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th scope="col" class="ps-4">Nama Mahasiswa</th>
+                    <th scope="col">NIM</th>
+                    <th scope="col">UID Kartu</th>
+                    <th scope="col">Verifikasi Wajah</th>
+                    <th scope="col">Status Terakhir</th>
+                    <th scope="col" class="text-end pe-4">Waktu (WIB)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in records %}
+                <tr class="cursor-pointer" onclick="window.location='{{ url_for('mahasiswa_detail', uid=row.uid) }}'">
+                    <td class="ps-4 fw-medium">{{ row.nama }}</td>
+                    <td>{{ row.nim }}</td>
+                    <td><code class="text-muted">{{ row.uid }}</code></td>
+                    <td>
+                        {% if row.face_status == 'MATCH' %}
+                        <span class="badge-match">User Matches</span>
+                        {% elif row.face_status == 'MISMATCH' %}
+                        <span class="badge-mismatch">Mismatch</span>
+                        {% else %}
+                        <span class="badge-unknown">Indefinite</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.action == 'IN' %}
+                        <span
+                            class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3">
+                            <i class="me-1">⬇</i> MASUK
+                        </span>
+                        {% elif row.action == 'OUT' %}
+                        <span
+                            class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3">
+                            <i class="me-1">⬆</i> KELUAR
+                        </span>
+                        {% elif row.action == 'DENIED' %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3">
+                            <i class="me-1">✖</i> DITOLAK
+                        </span>
+                        {% else %}
+                        <span class="badge bg-light text-dark border">{{ row.action }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-4 text-muted fw-light">
+                        {{ row.timestamp }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        <div class="py-4">
+                            <p class="mb-1" style="font-size: 2rem;">📭</p>
+                            <p>Belum ada aktivitas absensi hari ini.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 </div>
 
 <script>
