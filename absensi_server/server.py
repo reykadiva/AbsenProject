@@ -111,6 +111,11 @@ def tap():
             except Exception as ex:
                 print(f"[SYNC WARNING] Failed to lookup recent face: {ex}")
 
+        # ENFORCEMENT: Only allow IN/OUT if face is MATCH
+        if face_status != 'MATCH':
+            print(f"[SECURITY] Action {action} -> DENIED because face is {face_status}")
+            action = 'DENIED'
+
         # 2. Log Attendance
         # timestamp is handled by DEFAULT CURRENT_TIMESTAMP (UTC)
         cursor.execute('''
